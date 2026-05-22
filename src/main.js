@@ -1,4 +1,129 @@
 import Phaser from 'phaser';
 
-// Nah, di bawah sini lo tinggal paste code config Phaser 
-// sama scene GamePlay yang udah sempet kita bahas kemaren, Bos.
+import bgSelectPlayerImg from './assets/bgSelectPlayer.png';
+import fighterBlueImg from './assets/Boxing guy/Fighting Static Blue Air.png';
+
+class LandingPage extends Phaser.Scene {
+    constructor() {
+        super({ key: 'LandingPage' });
+    }
+
+    preload() {
+        this.load.image('bgSelect', bgSelectPlayerImg);
+        this.load.image('fighterBlue', fighterBlueImg);
+    }
+
+    create() {
+        const width = this.sys.game.config.width;
+        const height = this.sys.game.config.height;
+
+        // --- BACKGROUND ---
+        this.add.image(width / 2, height / 2, 'bgSelect').setDisplaySize(width, height);
+
+        // --- GELAPKAN BACKGROUND SEDIKIT ---
+        this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.5);
+
+        // --- KARTU KARAKTER (KIRI & KANAN) ---
+        const cardWidth = 220;
+        const cardHeight = 440;
+        const cardY = height / 2 - 20;
+        const cardRadius = 110;
+
+        const graphics = this.add.graphics();
+        graphics.fillStyle(0x3e3c3f, 0.95);
+        
+        // Kiri
+        const leftBoxX = width / 2 - 250 - (cardWidth / 2);
+        const leftBoxY = height / 2 - (cardHeight / 2);
+        graphics.fillRoundedRect(leftBoxX, leftBoxY, cardWidth, cardHeight, cardRadius);
+
+        // Kanan
+        const rightBoxX = width / 2 + 250 - (cardWidth / 2);
+        const rightBoxY = height / 2 - (cardHeight / 2);
+        graphics.fillRoundedRect(rightBoxX, rightBoxY, cardWidth, cardHeight, cardRadius);
+
+        // --- ISI KARTU KIRI ---
+        const leftCenterX = leftBoxX + cardWidth / 2;
+        this.add.text(leftCenterX, leftBoxY + 50, '^', { fontSize: '40px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.image(leftCenterX, height / 2 - 20, 'fighterBlue').setScale(4).setOrigin(0.5);
+        this.add.text(leftCenterX, leftBoxY + cardHeight - 110, 'SIGIT', { fontFamily: '"Courier New", Courier, monospace', fontSize: '32px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setShadow(2, 2, '#000', 0, false, true);
+        this.add.text(leftCenterX, leftBoxY + cardHeight - 50, 'v', { fontSize: '30px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+
+        // --- ISI KARTU KANAN ---
+        const rightCenterX = rightBoxX + cardWidth / 2;
+        this.add.text(rightCenterX, rightBoxY + 50, '^', { fontSize: '40px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.image(rightCenterX, height / 2 - 20, 'fighterBlue').setScale(4).setOrigin(0.5);
+        this.add.text(rightCenterX, rightBoxY + cardHeight - 110, 'SIGIT', { fontFamily: '"Courier New", Courier, monospace', fontSize: '32px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setShadow(2, 2, '#000', 0, false, true);
+        this.add.text(rightCenterX, rightBoxY + cardHeight - 50, 'v', { fontSize: '30px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
+
+        // --- TEKS VS TENGAH ---
+        this.add.text(width / 2, height / 2 - 20, 'VS', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '64px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setStroke('#000', 8).setShadow(4, 4, '#000000', 0, false, true); // Efek bayangan pixel
+
+        // --- TOMBOL MULAI (PIXEL ART STYLE) ---
+        const btnWidth = 200;
+        const btnHeight = 60;
+        
+        // Kotak background tombol
+        const btnBg = this.add.rectangle(width / 2, height / 2 + 100, btnWidth, btnHeight, 0x4CAF50)
+            .setInteractive({ useHandCursor: true });
+        
+        // Memberikan border tebal untuk gaya pixel art
+        btnBg.setStrokeStyle(6, 0x000000);
+
+        // Teks tombol
+        const btnText = this.add.text(width / 2, height / 2 + 100, 'MULAI', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '28px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setShadow(3, 3, '#000000', 0, false, true);
+
+        // Efek Hover (kursor masuk ke tombol)
+        btnBg.on('pointerover', () => {
+            btnBg.setFillStyle(0x66bb6a);
+            this.sys.canvas.style.cursor = 'pointer';
+        });
+
+        // Efek keluar hover (kursor keluar dari tombol)
+        btnBg.on('pointerout', () => {
+            btnBg.setFillStyle(0x4CAF50);
+            this.sys.canvas.style.cursor = 'default';
+        });
+
+        // Efek saat tombol diklik
+        btnBg.on('pointerdown', () => {
+            btnBg.setFillStyle(0x388E3C);
+            btnBg.y += 4; // Tombol seakan ditekan
+            btnText.y += 4;
+            
+            // Mengembalikan posisi setelah diklik (simulasi delay)
+            this.time.delayedCall(100, () => {
+                btnBg.y -= 4;
+                btnText.y -= 4;
+                console.log("Game Dimulai!");
+                // Jika ingin pindah scene, kamu bisa pakai:
+                // this.scene.start('GamePlayScene');
+            });
+        });
+    }
+}
+
+const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    parent: 'app',
+    pixelArt: true, // WAJIB untuk game sprite 2D Pixel Art agar tetap tajam
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    scene: [LandingPage]
+};
+
+const game = new Phaser.Game(config);
