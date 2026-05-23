@@ -3,6 +3,8 @@ import Phaser from 'phaser';
 import bgSelectPlayerImg from './assets/bgSelectPlayer.png';
 import fighterBlueImg from './assets/Boxing guy/Fighting Static Blue Air.png';
 import fighterIdleImg from './assets/Boxing guy/Fighting Static Blue Idle.png';
+import fighterPunchImg from './assets/Boxing guy/Fighting Static Blue Front P.png';
+import fighterCrouchPunchImg from './assets/Boxing guy/Fighting Static Blue Crouch Strong P2.png';
 import mapTmj from './tile_source/map.tmj?url';
 import tileset1Img from './tile_source/1.png';
 import tileset2Img from './tile_source/2.png';
@@ -17,6 +19,8 @@ class GamePlayScene extends Phaser.Scene {
         this.load.image('tileset1', tileset1Img);
         this.load.image('tileset2', tileset2Img);
         this.load.image('fighterIdle', fighterIdleImg);
+        this.load.image('fighterPunch', fighterPunchImg);
+        this.load.image('fighterCrouchPunch', fighterCrouchPunchImg);
     }
 
     create() {
@@ -41,11 +45,23 @@ class GamePlayScene extends Phaser.Scene {
         if (collisionLayer) collisionLayer.setScale(scaleX, scaleY);
 
         // Player 1 (Kiri)
-        const player1 = this.add.image(width / 4, height - 150, 'fighterIdle').setScale(4);
+        this.player1 = this.physics.add.sprite(width / 4, height - 150, 'fighterIdle').setScale(4);
+        this.player1.setCollideWorldBounds(true);
         
-        // Player 2 (Kanan) - flipX untuk menghadap ke kiri
-        const player2 = this.add.image(3 * width / 4, height - 150, 'fighterIdle').setScale(4);
-        player2.flipX = true;
+        // Player 2 (Musuh)
+        this.player2 = this.physics.add.sprite(3 * width / 4, height - 150, 'fighterIdle').setScale(4);
+        this.player2.flipX = true;
+        this.player2.setCollideWorldBounds(true);
+
+        // Input WASD setup
+        this.keys = this.input.keyboard.addKeys({
+            up: Phaser.Input.Keyboard.KeyCodes.W,
+            down: Phaser.Input.Keyboard.KeyCodes.S,
+            left: Phaser.Input.Keyboard.KeyCodes.A,
+            right: Phaser.Input.Keyboard.KeyCodes.D,
+            attackRight: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+            attackUp: Phaser.Input.Keyboard.KeyCodes.UP
+        });
 
         // Tambahkan teks sementara atau UI
         this.add.text(width / 2, 50, 'FIGHT!', {
@@ -66,6 +82,62 @@ class GamePlayScene extends Phaser.Scene {
         backBtnText.on('pointerdown', () => {
             this.scene.start('LandingPage');
         });
+    }
+
+    update() {
+        const speed = 200;
+
+        // --- Pergerakan Player 1 dengan WASD ---
+        this.player1.setVelocity(0); // Reset kecepatan setiap frame
+
+        let isAttacking = false;
+
+        // --- Logika Menyerang (Arrow Keys) ---
+        if (this.keys.attackRight.isDown) {
+            this.player1.setTexture('fighterPunch');
+            isAttacking = true;
+        } else if (this.keys.attackUp.isDown) {
+            this.player1.setTexture('fighterCrouchPunch');
+            isAttacking = true;
+        } else {
+            this.player1.setTexture('fighterIdle');
+        }
+
+        // Hanya bisa bergerak jika tidak sedang menyerang
+        if (!isAttacking) {
+            if (this.keys.left.isDown) {
+                this.player1.setVelocityX(-speed);
+                this.player1.flipX = true; // Menghadap kiri
+            } else if (this.keys.right.isDown) {
+                this.player1.setVelocityX(speed);
+                this.player1.flipX = false; // Menghadap kanan
+            }
+
+            if (this.keys.up.isDown) {
+                this.player1.setVelocityY(-speed);
+            } else if (this.keys.down.isDown) {
+                this.player1.setVelocityY(speed);
+            }
+        }
+
+        // --- Logika Musuh Mengikuti Player 1 ---
+        const enemySpeed = 100; // Kecepatan musuh lebih lambat
+        
+        // Menghitung jarak, pastikan musuh tidak terlalu nempel secara berlebihan
+        const distance = Phaser.Math.Distance.Between(this.player1.x, this.player1.y, this.player2.x, this.player2.y);
+        
+        if (distance > 50) { // Jika musuh agak jauh, maka jalan mendatangi player
+            this.physics.moveToObject(this.player2, this.player1, enemySpeed);
+        } else { // Jika sudah dekat, musuh berhenti
+            this.player2.setVelocity(0);
+        }
+
+        // Musuh selalu menghadap player 1
+        if (this.player2.body.velocity.x > 0) {
+            this.player2.flipX = false; // Hadap kanan
+        } else if (this.player2.body.velocity.x < 0) {
+            this.player2.flipX = true; // Hadap kiri
+        }
     }
 }
 
@@ -185,6 +257,12 @@ const config = {
     height: 600,
     parent: 'app',
     pixelArt: true, // WAJIB untuk game sprite 2D Pixel Art agar tetap tajam
+    physics: {
+        default: 'arcade',
+        arcade: {
+            debug: false
+        }
+    },
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
