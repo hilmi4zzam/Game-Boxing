@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 
 import bgSelectPlayerImg from './assets/bgSelectPlayer.png';
 import fighterBlueImg from './assets/Boxing guy/Fighting Static Blue Air.png';
-import mapGameImg from './assets/mapGame.png';
 import fighterIdleImg from './assets/Boxing guy/Fighting Static Blue Idle.png';
+import mapTmj from './tile_source/map.tmj?url';
+import tileset1Img from './tile_source/1.png';
+import tileset2Img from './tile_source/2.png';
 
 class GamePlayScene extends Phaser.Scene {
     constructor() {
@@ -11,7 +13,9 @@ class GamePlayScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('mapGame', mapGameImg);
+        this.load.tilemapTiledJSON('mapGame', mapTmj);
+        this.load.image('tileset1', tileset1Img);
+        this.load.image('tileset2', tileset2Img);
         this.load.image('fighterIdle', fighterIdleImg);
     }
 
@@ -19,8 +23,22 @@ class GamePlayScene extends Phaser.Scene {
         const width = this.sys.game.config.width;
         const height = this.sys.game.config.height;
 
-        // Background
-        this.add.image(width / 2, height / 2, 'mapGame').setDisplaySize(width, height);
+        // Background Map
+        const map = this.make.tilemap({ key: 'mapGame' });
+        const tileset1 = map.addTilesetImage('1', 'tileset1');
+        const tileset2 = map.addTilesetImage('2', 'tileset2');
+        
+        const scaleX = width / map.widthInPixels;
+        const scaleY = height / map.heightInPixels;
+        
+        const baseLayer = map.createLayer('Base', [tileset1, tileset2], 0, 0);
+        if (baseLayer) baseLayer.setScale(scaleX, scaleY);
+        
+        const ringLayer = map.createLayer('Ring_bottom', [tileset1, tileset2], 0, 0);
+        if (ringLayer) ringLayer.setScale(scaleX, scaleY);
+        
+        const collisionLayer = map.createLayer('Collesion', [tileset1, tileset2], 0, 0);
+        if (collisionLayer) collisionLayer.setScale(scaleX, scaleY);
 
         // Player 1 (Kiri)
         const player1 = this.add.image(width / 4, height - 150, 'fighterIdle').setScale(4);
