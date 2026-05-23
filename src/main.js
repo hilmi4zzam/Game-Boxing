@@ -2,6 +2,54 @@ import Phaser from 'phaser';
 
 import bgSelectPlayerImg from './assets/bgSelectPlayer.png';
 import fighterBlueImg from './assets/Boxing guy/Fighting Static Blue Air.png';
+import mapGameImg from './assets/mapGame.png';
+import fighterIdleImg from './assets/Boxing guy/Fighting Static Blue Idle.png';
+
+class GamePlayScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'GamePlayScene' });
+    }
+
+    preload() {
+        this.load.image('mapGame', mapGameImg);
+        this.load.image('fighterIdle', fighterIdleImg);
+    }
+
+    create() {
+        const width = this.sys.game.config.width;
+        const height = this.sys.game.config.height;
+
+        // Background
+        this.add.image(width / 2, height / 2, 'mapGame').setDisplaySize(width, height);
+
+        // Player 1 (Kiri)
+        const player1 = this.add.image(width / 4, height - 150, 'fighterIdle').setScale(4);
+        
+        // Player 2 (Kanan) - flipX untuk menghadap ke kiri
+        const player2 = this.add.image(3 * width / 4, height - 150, 'fighterIdle').setScale(4);
+        player2.flipX = true;
+
+        // Tambahkan teks sementara atau UI
+        this.add.text(width / 2, 50, 'FIGHT!', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '48px',
+            fill: '#ff0000',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setStroke('#fff', 6).setShadow(4, 4, '#000000', 0, false, true);
+
+        // Tombol kembali ke menu
+        const backBtnText = this.add.text(20, 20, '< KEMBALI', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '20px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setInteractive({ useHandCursor: true });
+
+        backBtnText.on('pointerdown', () => {
+            this.scene.start('LandingPage');
+        });
+    }
+}
 
 class LandingPage extends Phaser.Scene {
     constructor() {
@@ -106,8 +154,8 @@ class LandingPage extends Phaser.Scene {
                 btnBg.y -= 4;
                 btnText.y -= 4;
                 console.log("Game Dimulai!");
-                // Jika ingin pindah scene, kamu bisa pakai:
-                // this.scene.start('GamePlayScene');
+                // Pindah ke scene utama permainan
+                this.scene.start('GamePlayScene');
             });
         });
     }
@@ -123,7 +171,7 @@ const config = {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    scene: [LandingPage]
+    scene: [LandingPage, GamePlayScene]
 };
 
 const game = new Phaser.Game(config);
