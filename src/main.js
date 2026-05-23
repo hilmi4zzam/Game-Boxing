@@ -52,6 +52,7 @@ class GamePlayScene extends Phaser.Scene {
         this.player2 = this.physics.add.sprite(3 * width / 4, height - 150, 'fighterIdle').setScale(4);
         this.player2.flipX = true;
         this.player2.setCollideWorldBounds(true);
+        this.enemyIsAttacking = false;
 
         // Input WASD setup
         this.keys = this.input.keyboard.addKeys({
@@ -126,10 +127,32 @@ class GamePlayScene extends Phaser.Scene {
         // Menghitung jarak, pastikan musuh tidak terlalu nempel secara berlebihan
         const distance = Phaser.Math.Distance.Between(this.player1.x, this.player1.y, this.player2.x, this.player2.y);
         
-        if (distance > 50) { // Jika musuh agak jauh, maka jalan mendatangi player
+        if (distance > 60) { // Jika musuh agak jauh, maka jalan mendatangi player
             this.physics.moveToObject(this.player2, this.player1, enemySpeed);
+            if (!this.enemyIsAttacking) {
+                this.player2.setTexture('fighterIdle');
+            }
         } else { // Jika sudah dekat, musuh berhenti
             this.player2.setVelocity(0);
+            
+            // Logika Auto-Attack Musuh
+            if (!this.enemyIsAttacking) {
+                this.enemyIsAttacking = true;
+                
+                // Memilih acak antara pukulan biasa (0) & pukulan jongkok (1)
+                const isCrouchPunch = Math.random() > 0.5;
+                this.player2.setTexture(isCrouchPunch ? 'fighterCrouchPunch' : 'fighterPunch');
+                
+                // Durasi serangan berjalan (400ms)
+                this.time.delayedCall(400, () => {
+                    this.player2.setTexture('fighterIdle');
+                    
+                    // Jeda cooldown musuh sebelum bisa menyerang kembali (600ms gap)
+                    this.time.delayedCall(600, () => {
+                        this.enemyIsAttacking = false;
+                    });
+                });
+            }
         }
 
         // Musuh selalu menghadap player 1
