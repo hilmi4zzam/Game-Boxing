@@ -5,6 +5,8 @@ import fighterBlueImg from './assets/Boxing guy/Fighting Static Blue Air.png';
 import fighterIdleImg from './assets/Boxing guy/Fighting Static Blue Idle.png';
 import fighterPunchImg from './assets/Boxing guy/Fighting Static Blue Front P.png';
 import fighterCrouchPunchImg from './assets/Boxing guy/Fighting Static Blue Crouch Strong P2.png';
+import fighterKO1Img from './assets/Boxing guy/Fighting Static Blue KO1.png';
+import fighterKO2Img from './assets/Boxing guy/Fighting Static Blue KO2.png';
 import mapTmj from './tile_source/map.tmj?url';
 import tileset1Img from './tile_source/1.png';
 import tileset2Img from './tile_source/2.png';
@@ -21,6 +23,8 @@ class GamePlayScene extends Phaser.Scene {
         this.load.image('fighterIdle', fighterIdleImg);
         this.load.image('fighterPunch', fighterPunchImg);
         this.load.image('fighterCrouchPunch', fighterCrouchPunchImg);
+        this.load.image('fighterKO1', fighterKO1Img);
+        this.load.image('fighterKO2', fighterKO2Img);
     }
 
     create() {
@@ -64,14 +68,6 @@ class GamePlayScene extends Phaser.Scene {
             attackUp: Phaser.Input.Keyboard.KeyCodes.UP
         });
 
-        // Tambahkan teks sementara atau UI
-        this.add.text(width / 2, 50, 'FIGHT!', {
-            fontFamily: '"Courier New", Courier, monospace',
-            fontSize: '48px',
-            fill: '#ff0000',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setStroke('#fff', 6).setShadow(4, 4, '#000000', 0, false, true);
-
         // Tombol kembali ke menu
         const backBtnText = this.add.text(20, 20, '< KEMBALI', {
             fontFamily: '"Courier New", Courier, monospace',
@@ -83,9 +79,63 @@ class GamePlayScene extends Phaser.Scene {
         backBtnText.on('pointerdown', () => {
             this.scene.start('LandingPage');
         });
+
+        // --- SISTEM HEALTH BAR ---
+        this.playerHealth = 100;
+        this.enemyHealth = 100;
+        this.isGameOver = false;
+        this.playerHasHit = false;
+
+        this.healthBarBg = this.add.graphics();
+        this.healthBarBg.fillStyle(0x000000, 0.8);
+        this.healthBarBg.fillRect(50, 20, 300, 20); // Player 1 Background
+        this.healthBarBg.fillRect(width - 350, 20, 300, 20); // Player 2 Background
+
+        this.healthBarFill = this.add.graphics();
+        this.updateHealthBars();
+    }
+
+    triggerKO(character, isPlayer) {
+        this.isGameOver = true;
+        this.player1.setVelocity(0);
+        this.player2.setVelocity(0);
+        character.setTexture('fighterKO1');
+        
+        const width = this.sys.game.config.width;
+        const height = this.sys.game.config.height;
+
+        this.add.text(width / 2, height / 2, isPlayer ? 'YOU LOSE!' : 'YOU WIN!', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '64px',
+            fill: isPlayer ? '#ff0000' : '#00ff00',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setStroke('#000', 8);
+
+        this.time.delayedCall(500, () => {
+            character.setTexture('fighterKO2');
+        });
+    }
+
+    updateHealthBars() {
+        this.healthBarFill.clear();
+        const width = this.sys.game.config.width;
+
+        // Player 1 health (Bar Hijau)
+        if (this.playerHealth > 0) {
+            this.healthBarFill.fillStyle(0x00ff00, 1);
+            this.healthBarFill.fillRect(50, 20, 3 * this.playerHealth, 20);
+        }
+
+        // Player 2 health (Bar Merah)
+        if (this.enemyHealth > 0) {
+            this.healthBarFill.fillStyle(0xff0000, 1);
+            this.healthBarFill.fillRect(width - 50 - (3 * this.enemyHealth), 20, 3 * this.enemyHealth, 20);
+        }
     }
 
     update() {
+        if (this.isGameOver) return; // Hentikan update logic jika game usai
+
         const speed = 200;
 
         // --- Pergerakan Player 1 dengan WASD ---
@@ -102,6 +152,32 @@ class GamePlayScene extends Phaser.Scene {
             isAttacking = true;
         } else {
             this.player1.setTexture('fighterIdle');
+        }
+
+        // --- Variabel jarak karakter ---
+        const distance = Phaser.Math.Distance.Between(this.player1.x, this.player1.y, this.player2.x, this.player2.y);
+
+        // --- SISTEM PUKULAN PLAYER ---
+        if (isAttacking && distance < 80 && !this.playerHasHit) {
+            const facingRight = !this.player1.flipX;
+            const enemyIsRight = this.player2.x > this.player1.x;
+            
+            // Cek jika player menyerang menghadap musuh
+            if ((facingRight && enemyIsRight) || (!facingRight && !enemyIsRight)) {
+                this.enemyHealth -= 10;
+                this.playerHasHit = true;
+                this.updateHealthBars();
+                
+                if (this.enemyHealth <= 0) {
+                    this.triggerKO(this.player2, false);
+                    return;
+                }
+            }
+        }
+        
+        // Reset boolean hit jika tidak menekan tombol serang (mencegah damage beruntun satu pukulan)
+        if (!isAttacking) {
+            this.playerHasHit = false;
         }
 
         // Hanya bisa bergerak jika tidak sedang menyerang
@@ -124,9 +200,6 @@ class GamePlayScene extends Phaser.Scene {
         // --- Logika Musuh Mengikuti Player 1 ---
         const enemySpeed = 100; // Kecepatan musuh lebih lambat
         
-        // Menghitung jarak, pastikan musuh tidak terlalu nempel secara berlebihan
-        const distance = Phaser.Math.Distance.Between(this.player1.x, this.player1.y, this.player2.x, this.player2.y);
-        
         if (distance > 60) { // Jika musuh agak jauh, maka jalan mendatangi player
             this.physics.moveToObject(this.player2, this.player1, enemySpeed);
             if (!this.enemyIsAttacking) {
@@ -135,7 +208,7 @@ class GamePlayScene extends Phaser.Scene {
         } else { // Jika sudah dekat, musuh berhenti
             this.player2.setVelocity(0);
             
-            // Logika Auto-Attack Musuh
+            // Logika Auto-Attack Musuh (Dipercepat)
             if (!this.enemyIsAttacking) {
                 this.enemyIsAttacking = true;
                 
@@ -143,12 +216,21 @@ class GamePlayScene extends Phaser.Scene {
                 const isCrouchPunch = Math.random() > 0.5;
                 this.player2.setTexture(isCrouchPunch ? 'fighterCrouchPunch' : 'fighterPunch');
                 
-                // Durasi serangan berjalan (400ms)
-                this.time.delayedCall(400, () => {
+                // Kurangi darah Player
+                this.playerHealth -= 10;
+                this.updateHealthBars();
+                if (this.playerHealth <= 0) {
+                    this.triggerKO(this.player1, true);
+                    return;
+                }
+
+                // Durasi serangan musuh lebih cepat (200ms)
+                this.time.delayedCall(200, () => {
+                    if (this.isGameOver) return; // Mencegah transisi ke idle jika musuh mati
                     this.player2.setTexture('fighterIdle');
                     
-                    // Jeda cooldown musuh sebelum bisa menyerang kembali (600ms gap)
-                    this.time.delayedCall(600, () => {
+                    // Jeda cooldown serangan musuh lebih singkat agar lebih susah (300ms gap)
+                    this.time.delayedCall(300, () => {
                         this.enemyIsAttacking = false;
                     });
                 });
