@@ -40,23 +40,46 @@ class GamePlayScene extends Phaser.Scene {
         const scaleY = height / map.heightInPixels;
         
         const baseLayer = map.createLayer('Base', [tileset1, tileset2], 0, 0);
-        if (baseLayer) baseLayer.setScale(scaleX, scaleY);
-        
-        const ringLayer = map.createLayer('Ring_bottom', [tileset1, tileset2], 0, 0);
-        if (ringLayer) ringLayer.setScale(scaleX, scaleY);
+        if (baseLayer) {
+            baseLayer.setScale(scaleX, scaleY);
+            baseLayer.setDepth(0); // Base ditaruh di layer paling bawah
+        }
         
         const collisionLayer = map.createLayer('Collesion', [tileset1, tileset2], 0, 0);
-        if (collisionLayer) collisionLayer.setScale(scaleX, scaleY);
+        if (collisionLayer) {
+            collisionLayer.setScale(scaleX, scaleY);
+            collisionLayer.setCollisionByExclusion([-1]); // Set collision semua tile di layer ini kecuali yang kosong
+            // Sembunyikan dihapus agar border tetap terlihat
+            collisionLayer.setDepth(0); // Ditaruh berbarengan di bawah dengan base
+        }
 
         // Player 1 (Kiri)
         this.player1 = this.physics.add.sprite(width / 4, height - 150, 'fighterIdle').setScale(4);
         this.player1.setCollideWorldBounds(true);
+        this.player1.setDepth(1); // Player ada di atas Base, tapi di bawah Ring_Bottom
+        
+        // Memperkecil Hitbox (Physics Body) agar sesuai badan aslinya (menghilangkan gap transparan)
+        this.player1.body.setSize(this.player1.width * 0.3, this.player1.height * 0.9);
+        this.player1.body.setOffset(this.player1.width * 0.35, this.player1.height * 0.1);
         
         // Player 2 (Musuh)
         this.player2 = this.physics.add.sprite(3 * width / 4, height - 150, 'fighterIdle').setScale(4);
         this.player2.flipX = true;
         this.player2.setCollideWorldBounds(true);
+        this.player2.setDepth(1); // Musuh juga ada di atas Base, tapi di bawah Ring_Bottom
+        this.player2.body.setSize(this.player2.width * 0.3, this.player2.height * 0.9);
+        this.player2.body.setOffset(this.player2.width * 0.35, this.player2.height * 0.1);
         this.enemyIsAttacking = false;
+
+        const ringLayer = map.createLayer('Ring_bottom', [tileset1, tileset2], 0, 0);
+        if (ringLayer) {
+            ringLayer.setScale(scaleX, scaleY);
+            ringLayer.setDepth(2); // Ring_Bottom ditaruh di atas player agar menutupi
+        }
+
+        // Tambahkan colider agar player & musuh tidak bisa menembus dinding collision
+        this.physics.add.collider(this.player1, collisionLayer);
+        this.physics.add.collider(this.player2, collisionLayer);
 
         // Input WASD setup
         this.keys = this.input.keyboard.addKeys({
