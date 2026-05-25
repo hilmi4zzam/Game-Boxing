@@ -1,15 +1,146 @@
 import Phaser from 'phaser';
 
 import bgSelectPlayerImg from './assets/bgSelectPlayer.png';
-import fighterBlueImg from './assets/Boxing guy/Fighting Static Blue Air.png';
-import fighterIdleImg from './assets/Boxing guy/Fighting Static Blue Idle.png';
-import fighterPunchImg from './assets/Boxing guy/Fighting Static Blue Front P.png';
-import fighterCrouchPunchImg from './assets/Boxing guy/Fighting Static Blue Crouch Strong P2.png';
-import fighterKO1Img from './assets/Boxing guy/Fighting Static Blue KO1.png';
-import fighterKO2Img from './assets/Boxing guy/Fighting Static Blue KO2.png';
 import mapTmj from './tile_source/map.tmj?url';
 import tileset1Img from './tile_source/1.png';
 import tileset2Img from './tile_source/2.png';
+import playerImg from './assets/player.png';
+import enemyImg from './assets/enemy.png';
+
+const FRAME_WIDTH = 675;
+const FRAME_HEIGHT = 675;
+const PLAYER_TEXTURE = 'player';
+const ENEMY_TEXTURE = 'enemy';
+const PLAYER_ANIMS = {
+    front: 'player-walk-front',
+    left: 'player-walk-left',
+    right: 'player-walk-right',
+    back: 'player-walk-back',
+    ko: 'player-ko'
+};
+const ENEMY_ANIMS = {
+    front: 'enemy-walk-front',
+    left: 'enemy-walk-left',
+    right: 'enemy-walk-right',
+    back: 'enemy-walk-back',
+    ko: 'enemy-ko'
+};
+const WALK_FRAMES = {
+    front: { frames: [0, 1, 3, 4] },
+    left: { frames: [5, 6, 7, 8] },
+    right: { frames: [11, 12, 13, 14] },
+    back: { frames: [15, 16, 17, 18, 19] }
+};
+const CHARACTER_FRAMES = {
+    frontIdle: 0,
+    battleIdle: 20,
+    guard: 21,
+    punch: 22,
+    koStart: 23,
+    koGround: 24
+};
+
+function loadCharacterSprites(scene) {
+    const frameConfig = { frameWidth: FRAME_WIDTH, frameHeight: FRAME_HEIGHT };
+
+    if (!scene.textures.exists(PLAYER_TEXTURE)) {
+        scene.load.spritesheet(PLAYER_TEXTURE, playerImg, frameConfig);
+    }
+
+    if (!scene.textures.exists(ENEMY_TEXTURE)) {
+        scene.load.spritesheet(ENEMY_TEXTURE, enemyImg, frameConfig);
+    }
+}
+
+function createAnimation(scene, animationKey, textureKey, frameConfig, repeat = -1, frameRate = 10) {
+    if (scene.anims.exists(animationKey)) return;
+
+    scene.anims.create({
+        key: animationKey,
+        frames: scene.anims.generateFrameNumbers(textureKey, frameConfig),
+        frameRate,
+        repeat
+    });
+}
+
+function createCharacterAnimations(scene, textureKey, animations) {
+    Object.entries(WALK_FRAMES).forEach(([direction, frameConfig]) => {
+        createAnimation(scene, animations[direction], textureKey, frameConfig);
+    });
+    createAnimation(scene, animations.ko, textureKey, {
+        frames: [CHARACTER_FRAMES.koStart, CHARACTER_FRAMES.koGround]
+    }, 0, 6);
+}
+
+function setCharacterHitbox(sprite) {
+    sprite.body.setSize(sprite.width * 0.3, sprite.height * 0.9);
+    sprite.body.setOffset(sprite.width * 0.35, sprite.height * 0.1);
+}
+
+function getDirectionFromVector(x, y) {
+    if (Math.abs(x) >= Math.abs(y) && x !== 0) {
+        return x < 0 ? 'left' : 'right';
+    }
+
+    if (y !== 0) {
+        return y < 0 ? 'back' : 'front';
+    }
+
+    return 'front';
+}
+
+function playDirectionalWalk(sprite, animations, direction) {
+    sprite.flipX = false;
+    sprite.facing = direction;
+    sprite.anims.play(animations[direction], true);
+}
+
+function faceSpriteToward(sprite, target) {
+    sprite.facing = target.x < sprite.x ? 'left' : 'right';
+    sprite.flipX = sprite.facing === 'left';
+}
+
+function setBattleIdle(sprite, target) {
+    sprite.anims.stop();
+    if (target) {
+        faceSpriteToward(sprite, target);
+    }
+    sprite.setFrame(CHARACTER_FRAMES.battleIdle);
+}
+
+function setPreviewIdle(sprite) {
+    sprite.anims.stop();
+    sprite.flipX = false;
+    sprite.facing = 'front';
+    sprite.setFrame(CHARACTER_FRAMES.frontIdle);
+}
+
+function setActionFrame(sprite, action, target) {
+    sprite.anims.stop();
+    if (target) {
+        faceSpriteToward(sprite, target);
+    }
+    sprite.setFrame(CHARACTER_FRAMES[action]);
+}
+
+function setKOFrame(sprite, target, animations) {
+    sprite.anims.stop();
+    if (target) {
+        faceSpriteToward(sprite, target);
+    }
+    if (animations?.ko) {
+        sprite.anims.play(animations.ko, true);
+    } else {
+        sprite.setFrame(CHARACTER_FRAMES.koGround);
+    }
+}
+
+function isFacingTarget(sprite, target) {
+    if (sprite.facing === 'left') return target.x < sprite.x;
+    if (sprite.facing === 'right') return target.x > sprite.x;
+    if (sprite.facing === 'back') return target.y < sprite.y;
+    return target.y > sprite.y;
+}
 
 class GamePlayScene extends Phaser.Scene {
     constructor() {
@@ -20,11 +151,7 @@ class GamePlayScene extends Phaser.Scene {
         this.load.tilemapTiledJSON('mapGame', mapTmj);
         this.load.image('tileset1', tileset1Img);
         this.load.image('tileset2', tileset2Img);
-        this.load.image('fighterIdle', fighterIdleImg);
-        this.load.image('fighterPunch', fighterPunchImg);
-        this.load.image('fighterCrouchPunch', fighterCrouchPunchImg);
-        this.load.image('fighterKO1', fighterKO1Img);
-        this.load.image('fighterKO2', fighterKO2Img);
+        loadCharacterSprites(this);
     }
 
     create() {
@@ -54,22 +181,23 @@ class GamePlayScene extends Phaser.Scene {
         }
 
         // Player 1 (Kiri)
-        this.player1 = this.physics.add.sprite(width / 4, height - 150, 'fighterIdle').setScale(4);
+        this.player1 = this.physics.add.sprite(width / 4, height - 150, PLAYER_TEXTURE).setScale(0.2);
         this.player1.setCollideWorldBounds(true);
         this.player1.setDepth(1); // Player ada di atas Base, tapi di bawah Ring_Bottom
-        
-        // Memperkecil Hitbox (Physics Body) agar sesuai badan aslinya (menghilangkan gap transparan)
-        this.player1.body.setSize(this.player1.width * 0.3, this.player1.height * 0.9);
-        this.player1.body.setOffset(this.player1.width * 0.35, this.player1.height * 0.1);
+        setCharacterHitbox(this.player1);
         
         // Player 2 (Musuh)
-        this.player2 = this.physics.add.sprite(3 * width / 4, height - 150, 'fighterIdle').setScale(4);
+        this.player2 = this.physics.add.sprite(3 * width / 4, height - 150, ENEMY_TEXTURE).setScale(0.2);
         this.player2.flipX = true;
         this.player2.setCollideWorldBounds(true);
         this.player2.setDepth(1); // Musuh juga ada di atas Base, tapi di bawah Ring_Bottom
-        this.player2.body.setSize(this.player2.width * 0.3, this.player2.height * 0.9);
-        this.player2.body.setOffset(this.player2.width * 0.35, this.player2.height * 0.1);
+        setCharacterHitbox(this.player2);
         this.enemyIsAttacking = false;
+
+        createCharacterAnimations(this, PLAYER_TEXTURE, PLAYER_ANIMS);
+        createCharacterAnimations(this, ENEMY_TEXTURE, ENEMY_ANIMS);
+        setBattleIdle(this.player1, this.player2);
+        setBattleIdle(this.player2, this.player1);
 
         const ringLayer = map.createLayer('Ring_bottom', [tileset1, tileset2], 0, 0);
         if (ringLayer) {
@@ -78,8 +206,10 @@ class GamePlayScene extends Phaser.Scene {
         }
 
         // Tambahkan colider agar player & musuh tidak bisa menembus dinding collision
-        this.physics.add.collider(this.player1, collisionLayer);
-        this.physics.add.collider(this.player2, collisionLayer);
+        if (collisionLayer) {
+            this.physics.add.collider(this.player1, collisionLayer);
+            this.physics.add.collider(this.player2, collisionLayer);
+        }
 
         // Input WASD setup
         this.keys = this.input.keyboard.addKeys({
@@ -87,20 +217,8 @@ class GamePlayScene extends Phaser.Scene {
             down: Phaser.Input.Keyboard.KeyCodes.S,
             left: Phaser.Input.Keyboard.KeyCodes.A,
             right: Phaser.Input.Keyboard.KeyCodes.D,
-            attackRight: Phaser.Input.Keyboard.KeyCodes.RIGHT,
-            attackUp: Phaser.Input.Keyboard.KeyCodes.UP
-        });
-
-        // Tombol kembali ke menu
-        const backBtnText = this.add.text(20, 20, '< KEMBALI', {
-            fontFamily: '"Courier New", Courier, monospace',
-            fontSize: '20px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setInteractive({ useHandCursor: true });
-
-        backBtnText.on('pointerdown', () => {
-            this.scene.start('LandingPage');
+            punch: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+            defend: Phaser.Input.Keyboard.KeyCodes.UP
         });
 
         // --- SISTEM HEALTH BAR ---
@@ -122,7 +240,13 @@ class GamePlayScene extends Phaser.Scene {
         this.isGameOver = true;
         this.player1.setVelocity(0);
         this.player2.setVelocity(0);
-        character.setTexture('fighterKO1');
+        this.player1.anims.stop();
+        this.player2.anims.stop();
+        setKOFrame(
+            character,
+            isPlayer ? this.player2 : this.player1,
+            isPlayer ? PLAYER_ANIMS : ENEMY_ANIMS
+        );
         
         const width = this.sys.game.config.width;
         const height = this.sys.game.config.height;
@@ -167,9 +291,7 @@ class GamePlayScene extends Phaser.Scene {
         backBtn.on('pointerover', () => backBtn.setStyle({ fill: '#ffff00' }));
         backBtn.on('pointerout', () => backBtn.setStyle({ fill: '#ffffff' }));
 
-        this.time.delayedCall(500, () => {
-            character.setTexture('fighterKO2');
-        });
+        // Animasi tambahan saat KO jika ada
     }
 
     updateHealthBars() {
@@ -198,29 +320,28 @@ class GamePlayScene extends Phaser.Scene {
         this.player1.setVelocity(0); // Reset kecepatan setiap frame
 
         let isAttacking = false;
+        let canDamageEnemy = false;
+        let isDefending = false;
+        let isMoving = false;
 
         // --- Logika Menyerang (Arrow Keys) ---
-        if (this.keys.attackRight.isDown) {
-            this.player1.setTexture('fighterPunch');
+        if (this.keys.punch.isDown) { // Punch
+            setActionFrame(this.player1, 'punch', this.player2);
             isAttacking = true;
-        } else if (this.keys.attackUp.isDown) {
-            this.player1.setTexture('fighterCrouchPunch');
+            canDamageEnemy = true;
+        } else if (this.keys.defend.isDown) { // Defend
+            setActionFrame(this.player1, 'guard', this.player2);
             isAttacking = true;
-        } else {
-            this.player1.setTexture('fighterIdle');
+            isDefending = true;
         }
 
         // --- Variabel jarak karakter ---
         const distance = Phaser.Math.Distance.Between(this.player1.x, this.player1.y, this.player2.x, this.player2.y);
 
         // --- SISTEM PUKULAN PLAYER ---
-        if (isAttacking && distance < 80 && !this.playerHasHit) {
-            const facingRight = !this.player1.flipX;
-            const enemyIsRight = this.player2.x > this.player1.x;
-            
-            // Cek jika player menyerang menghadap musuh
-            if ((facingRight && enemyIsRight) || (!facingRight && !enemyIsRight)) {
-                this.enemyHealth -= 10;
+        if (canDamageEnemy && distance < 80 && !this.playerHasHit) {
+            if (isFacingTarget(this.player1, this.player2)) {
+                this.enemyHealth = Math.max(0, this.enemyHealth - 10);
                 this.playerHasHit = true;
                 this.updateHealthBars();
                 
@@ -232,25 +353,40 @@ class GamePlayScene extends Phaser.Scene {
         }
         
         // Reset boolean hit jika tidak menekan tombol serang (mencegah damage beruntun satu pukulan)
-        if (!isAttacking) {
+        if (!canDamageEnemy) {
             this.playerHasHit = false;
         }
 
         // Hanya bisa bergerak jika tidak sedang menyerang
         if (!isAttacking) {
+            let moveX = 0;
+            let moveY = 0;
+
             if (this.keys.left.isDown) {
-                this.player1.setVelocityX(-speed);
-                this.player1.flipX = true; // Menghadap kiri
+                moveX = -1;
+                isMoving = true;
             } else if (this.keys.right.isDown) {
-                this.player1.setVelocityX(speed);
-                this.player1.flipX = false; // Menghadap kanan
+                moveX = 1;
+                isMoving = true;
             }
 
             if (this.keys.up.isDown) {
-                this.player1.setVelocityY(-speed);
+                moveY = -1;
+                isMoving = true;
             } else if (this.keys.down.isDown) {
-                this.player1.setVelocityY(speed);
+                moveY = 1;
+                isMoving = true;
             }
+
+            this.player1.setVelocity(moveX * speed, moveY * speed);
+
+            if (isMoving) {
+                playDirectionalWalk(this.player1, PLAYER_ANIMS, getDirectionFromVector(moveX, moveY));
+            } else {
+                setBattleIdle(this.player1, this.player2);
+            }
+        } else {
+            this.player1.setVelocity(0);
         }
 
         // --- Logika Musuh Mengikuti Player 1 ---
@@ -259,7 +395,8 @@ class GamePlayScene extends Phaser.Scene {
         if (distance > 60) { // Jika musuh agak jauh, maka jalan mendatangi player
             this.physics.moveToObject(this.player2, this.player1, enemySpeed);
             if (!this.enemyIsAttacking) {
-                this.player2.setTexture('fighterIdle');
+                const enemyDirection = getDirectionFromVector(this.player2.body.velocity.x, this.player2.body.velocity.y);
+                playDirectionalWalk(this.player2, ENEMY_ANIMS, enemyDirection);
             }
         } else { // Jika sudah dekat, musuh berhenti
             this.player2.setVelocity(0);
@@ -268,13 +405,14 @@ class GamePlayScene extends Phaser.Scene {
             if (!this.enemyIsAttacking) {
                 this.enemyIsAttacking = true;
                 
-                // Memilih acak antara pukulan biasa (0) & pukulan jongkok (1)
-                const isCrouchPunch = Math.random() > 0.5;
-                this.player2.setTexture(isCrouchPunch ? 'fighterCrouchPunch' : 'fighterPunch');
+                setActionFrame(this.player2, 'punch', this.player1);
                 
                 // Kurangi darah Player
-                this.playerHealth -= 10;
-                this.updateHealthBars();
+                if (!(isDefending && isFacingTarget(this.player1, this.player2))) {
+                    this.playerHealth = Math.max(0, this.playerHealth - 10);
+                    this.updateHealthBars();
+                }
+
                 if (this.playerHealth <= 0) {
                     this.triggerKO(this.player1, true);
                     return;
@@ -283,7 +421,7 @@ class GamePlayScene extends Phaser.Scene {
                 // Durasi serangan musuh lebih cepat (200ms)
                 this.time.delayedCall(200, () => {
                     if (this.isGameOver) return; // Mencegah transisi ke idle jika musuh mati
-                    this.player2.setTexture('fighterIdle');
+                    setBattleIdle(this.player2, this.player1);
                     
                     // Jeda cooldown serangan musuh lebih singkat agar lebih susah (300ms gap)
                     this.time.delayedCall(300, () => {
@@ -292,12 +430,126 @@ class GamePlayScene extends Phaser.Scene {
                 });
             }
         }
+    }
+}
 
-        // Musuh selalu menghadap player 1
-        if (this.player2.body.velocity.x > 0) {
-            this.player2.flipX = false; // Hadap kanan
-        } else if (this.player2.body.velocity.x < 0) {
-            this.player2.flipX = true; // Hadap kiri
+class StartScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'StartScene' });
+    }
+
+    preload() {
+        loadCharacterSprites(this);
+    }
+
+    create() {
+        const width = this.sys.game.config.width;
+        const height = this.sys.game.config.height;
+
+        // Background abu-abu
+        this.cameras.main.setBackgroundColor('#808080');
+
+        this.playerPreview = this.physics.add.sprite(width / 2, height / 2 - 150, PLAYER_TEXTURE).setScale(0.2);
+        this.playerPreview.setCollideWorldBounds(true);
+
+        // Input Setup untuk WASD dan Arrow Keys
+        this.keys = this.input.keyboard.addKeys({
+            up: Phaser.Input.Keyboard.KeyCodes.W,
+            down: Phaser.Input.Keyboard.KeyCodes.S,
+            left: Phaser.Input.Keyboard.KeyCodes.A,
+            right: Phaser.Input.Keyboard.KeyCodes.D,
+            punch: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+            defend: Phaser.Input.Keyboard.KeyCodes.UP
+        });
+
+        createCharacterAnimations(this, PLAYER_TEXTURE, PLAYER_ANIMS);
+        setPreviewIdle(this.playerPreview);
+
+        const btnWidth = 250;
+        const btnHeight = 80;
+
+        const btnBg = this.add.rectangle(width / 2, height / 2, btnWidth, btnHeight, 0x4CAF50)
+            .setInteractive({ useHandCursor: true });
+        
+        btnBg.setStrokeStyle(6, 0x000000);
+
+        const btnText = this.add.text(width / 2, height / 2, 'MULAI GAME', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '32px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setShadow(3, 3, '#000000', 0, false, true);
+
+        btnBg.on('pointerover', () => {
+            btnBg.setFillStyle(0x66bb6a);
+            this.sys.canvas.style.cursor = 'pointer';
+        });
+
+        btnBg.on('pointerout', () => {
+            btnBg.setFillStyle(0x4CAF50);
+            this.sys.canvas.style.cursor = 'default';
+        });
+
+        btnBg.on('pointerdown', () => {
+            btnBg.setFillStyle(0x388E3C);
+            btnBg.y += 4;
+            btnText.y += 4;
+            
+            this.time.delayedCall(100, () => {
+                btnBg.y -= 4;
+                btnText.y -= 4;
+                this.scene.start('LandingPage');
+            });
+        });
+    }
+
+    update() {
+        const speed = 160;
+        let isMoving = false;
+        let isAttacking = false;
+
+        this.playerPreview.setVelocity(0);
+
+        // Aksi Menyerang (Punch, Defend)
+        if (this.keys.punch.isDown) {
+            setActionFrame(this.playerPreview, 'punch');
+            isAttacking = true;
+        } else if (this.keys.defend.isDown) {
+            setActionFrame(this.playerPreview, 'guard');
+            isAttacking = true;
+        }
+
+        // Pergerakan (jika tidak sedang menyerang)
+        if (!isAttacking) {
+            let moveX = 0;
+            let moveY = 0;
+
+            if (this.keys.left.isDown) {
+                moveX = -1;
+                isMoving = true;
+            } else if (this.keys.right.isDown) {
+                moveX = 1;
+                isMoving = true;
+            }
+
+            if (this.keys.up.isDown) {
+                moveY = -1;
+                isMoving = true;
+            } else if (this.keys.down.isDown) {
+                moveY = 1;
+                isMoving = true;
+            }
+
+            this.playerPreview.setVelocity(moveX * speed, moveY * speed);
+
+            if (isMoving) {
+                playDirectionalWalk(this.playerPreview, PLAYER_ANIMS, getDirectionFromVector(moveX, moveY));
+            } else {
+                setPreviewIdle(this.playerPreview);
+            }
+        } else {
+            this.playerPreview.setVelocity(0);
+            this.playerPreview.anims.stop(); // Hentikan animasi jalan jika sedang menyerang
         }
     }
 }
@@ -309,12 +561,24 @@ class LandingPage extends Phaser.Scene {
 
     preload() {
         this.load.image('bgSelect', bgSelectPlayerImg);
-        this.load.image('fighterBlue', fighterBlueImg);
+        loadCharacterSprites(this);
     }
 
     create() {
         const width = this.sys.game.config.width;
         const height = this.sys.game.config.height;
+
+        // --- TOMBOL KEMBALI ---
+        const backBtnText = this.add.text(20, 20, '< KEMBALI', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '20px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setInteractive({ useHandCursor: true }).setDepth(10);
+
+        backBtnText.on('pointerdown', () => {
+            this.scene.start('StartScene');
+        });
 
         // --- BACKGROUND ---
         this.add.image(width / 2, height / 2, 'bgSelect').setDisplaySize(width, height);
@@ -325,7 +589,6 @@ class LandingPage extends Phaser.Scene {
         // --- KARTU KARAKTER (KIRI & KANAN) ---
         const cardWidth = 220;
         const cardHeight = 440;
-        const cardY = height / 2 - 20;
         const cardRadius = 110;
 
         const graphics = this.add.graphics();
@@ -344,15 +607,15 @@ class LandingPage extends Phaser.Scene {
         // --- ISI KARTU KIRI ---
         const leftCenterX = leftBoxX + cardWidth / 2;
         this.add.text(leftCenterX, leftBoxY + 50, '^', { fontSize: '40px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
-        this.add.image(leftCenterX, height / 2 - 20, 'fighterBlue').setScale(4).setOrigin(0.5);
-        this.add.text(leftCenterX, leftBoxY + cardHeight - 110, 'SIGIT', { fontFamily: '"Courier New", Courier, monospace', fontSize: '32px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setShadow(2, 2, '#000', 0, false, true);
+        this.add.image(leftCenterX, height / 2 - 20, PLAYER_TEXTURE, 0).setScale(0.2).setOrigin(0.5);
+        this.add.text(leftCenterX, leftBoxY + cardHeight - 110, 'PLAYER', { fontFamily: '"Courier New", Courier, monospace', fontSize: '30px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setShadow(2, 2, '#000', 0, false, true);
         this.add.text(leftCenterX, leftBoxY + cardHeight - 50, 'v', { fontSize: '30px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
         // --- ISI KARTU KANAN ---
         const rightCenterX = rightBoxX + cardWidth / 2;
         this.add.text(rightCenterX, rightBoxY + 50, '^', { fontSize: '40px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
-        this.add.image(rightCenterX, height / 2 - 20, 'fighterBlue').setScale(4).setOrigin(0.5);
-        this.add.text(rightCenterX, rightBoxY + cardHeight - 110, 'SIGIT', { fontFamily: '"Courier New", Courier, monospace', fontSize: '32px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setShadow(2, 2, '#000', 0, false, true);
+        this.add.image(rightCenterX, height / 2 - 20, ENEMY_TEXTURE, 0).setScale(0.2).setOrigin(0.5);
+        this.add.text(rightCenterX, rightBoxY + cardHeight - 110, 'ENEMY', { fontFamily: '"Courier New", Courier, monospace', fontSize: '30px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setShadow(2, 2, '#000', 0, false, true);
         this.add.text(rightCenterX, rightBoxY + cardHeight - 50, 'v', { fontSize: '30px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5);
 
         // --- TEKS VS TENGAH ---
@@ -375,7 +638,7 @@ class LandingPage extends Phaser.Scene {
         btnBg.setStrokeStyle(6, 0x000000);
 
         // Teks tombol
-        const btnText = this.add.text(width / 2, height / 2 + 100, 'MULAI', {
+        const btnText = this.add.text(width / 2, height / 2 + 100, 'LANJUT', {
             fontFamily: '"Courier New", Courier, monospace',
             fontSize: '28px',
             fill: '#ffffff',
@@ -404,7 +667,6 @@ class LandingPage extends Phaser.Scene {
             this.time.delayedCall(100, () => {
                 btnBg.y -= 4;
                 btnText.y -= 4;
-                console.log("Game Dimulai!");
                 // Pindah ke scene utama permainan
                 this.scene.start('GamePlayScene');
             });
@@ -428,7 +690,7 @@ const config = {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    scene: [LandingPage, GamePlayScene]
+    scene: [StartScene, LandingPage, GamePlayScene]
 };
 
 const game = new Phaser.Game(config);
