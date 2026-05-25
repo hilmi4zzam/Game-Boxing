@@ -127,12 +127,45 @@ class GamePlayScene extends Phaser.Scene {
         const width = this.sys.game.config.width;
         const height = this.sys.game.config.height;
 
-        this.add.text(width / 2, height / 2, isPlayer ? 'YOU LOSE!' : 'YOU WIN!', {
+        // Background Pop-up semi-transparan
+        this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7).setDepth(10);
+
+        this.add.text(width / 2, height / 2 - 80, isPlayer ? 'YOU LOSE!' : 'YOU WIN!', {
             fontFamily: '"Courier New", Courier, monospace',
             fontSize: '64px',
             fill: isPlayer ? '#ff0000' : '#00ff00',
             fontStyle: 'bold'
-        }).setOrigin(0.5).setStroke('#000', 8);
+        }).setOrigin(0.5).setStroke('#000', 8).setDepth(11);
+
+        // Tombol Restart
+        const restartBtn = this.add.text(width / 2, height / 2 + 20, 'RESTART', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '32px',
+            fill: '#ffffff',
+            backgroundColor: '#444444',
+            padding: { x: 20, y: 10 }
+        }).setOrigin(0.5).setDepth(11).setInteractive({ useHandCursor: true });
+
+        restartBtn.on('pointerdown', () => {
+            this.scene.restart();
+        });
+        restartBtn.on('pointerover', () => restartBtn.setStyle({ fill: '#ffff00' }));
+        restartBtn.on('pointerout', () => restartBtn.setStyle({ fill: '#ffffff' }));
+
+        // Tombol Kembali
+        const backBtn = this.add.text(width / 2, height / 2 + 100, 'KEMBALI', {
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '32px',
+            fill: '#ffffff',
+            backgroundColor: '#444444',
+            padding: { x: 20, y: 10 }
+        }).setOrigin(0.5).setDepth(11).setInteractive({ useHandCursor: true });
+
+        backBtn.on('pointerdown', () => {
+            this.scene.start('LandingPage');
+        });
+        backBtn.on('pointerover', () => backBtn.setStyle({ fill: '#ffff00' }));
+        backBtn.on('pointerout', () => backBtn.setStyle({ fill: '#ffffff' }));
 
         this.time.delayedCall(500, () => {
             character.setTexture('fighterKO2');
