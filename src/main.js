@@ -365,7 +365,25 @@ class GamePlayScene extends Phaser.Scene {
         // --- SISTEM PUKULAN PLAYER ---
         if (canDamageEnemy && distance < 80 && !this.playerHasHit) {
             if (isFacingTarget(this.player1, this.player2)) {
-                this.enemyHealth = Math.max(0, this.enemyHealth - 10);
+                // Musuh reflek guard saat dipukul dengan probabilitas 60% agar game tetap bisa dimenangkan
+                if (Math.random() < 0.6) {
+                    setActionFrame(this.player2, 'guard', this.player1);
+                    this.enemyIsAttacking = true; // Lock aksi musuh agar menahan guard
+                    
+                    // Damage dikurangi signifikan saat guard
+                    this.enemyHealth = Math.max(0, this.enemyHealth - 2); 
+                    
+                    this.time.delayedCall(400, () => {
+                        if (!this.isGameOver) {
+                            this.enemyIsAttacking = false;
+                            setBattleIdle(this.player2, this.player1);
+                        }
+                    });
+                } else {
+                    // Kena pukulan telak
+                    this.enemyHealth = Math.max(0, this.enemyHealth - 10);
+                }
+
                 this.playerHasHit = true;
                 this.updateHealthBars();
                 
@@ -414,7 +432,7 @@ class GamePlayScene extends Phaser.Scene {
         }
 
         // --- Logika Musuh Mengikuti Player 1 ---
-        const enemySpeed = 100; // Kecepatan musuh lebih lambat
+        const enemySpeed = 160; // Kecepatan musuh dipercepat (lumayan cepat)
         
         if (distance > 60) { // Jika musuh agak jauh, maka jalan mendatangi player
             this.physics.moveToObject(this.player2, this.player1, enemySpeed);
